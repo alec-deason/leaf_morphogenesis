@@ -7,7 +7,7 @@ My expectation is that this repository will eventually host the final code as a 
 The tutorial portion (files under the 'writing' directory) are licensed under a [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](http://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 
-This software itself (all other files) is distributed under the terms of both the [MIT License][lm] and the [Apache License 2.0][la].
+The software itself (all other files) is distributed under the terms of both the [MIT License][lm] and the [Apache License 2.0][la].
 
 [lm]: docs/LICENSE-MIT
 [la]: docs/LICENSE-APACHE
