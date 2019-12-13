@@ -132,4 +132,76 @@ Here we just loop through all the edges in the mesh, transform the vertices so t
 
 ![primordium](images/primordium_first_render.png)
 
-Not great, not pretty but basically leaf shaped. I'll take it.
+Not pretty but basically leaf shaped. I'll take it.
+
+## Vein growth
+
+The first process I'm going to tackle is simple vein growth without branching. The basic process is super simple but it's going to have complex interactions with other parts of the model. We'll have to deal with moving vertices in the mesh and adding verticies while respecting the requirement that they always form triangles. Both are harder than just making the veins longer.
+
+First, let's do the topology perserving growth, which is where existing segments of vein elongate. I say it's topology preserving because it neither adds nor removes vertices and it doesn't change which vertices form triangles, it just changes the length of the triangle's sides. That makes it prety simple.
+
+```rust
+pub fn step_simulation(&mut self, delta: f32) {
+```
+
+Great, a function for stepping the leaf's simulation forward but what do I do inside of it? I need to find the veins which, for this process at least, means the edges in the mesh which have `Vein` type vertices at each end. Like with the renderer, this gives me second thoughts about my mesh representation because that information isn't readily avaliable from it, I will have to scan all the edges to find the ones that match that requirement. For a small mesh that's quick if slightly complicated but for a large mesh it's ugly. I'm still going to keep the representation though because I'm still not sure what to replace it with. Instead what I'll do is build a utility function to find the vein edges and implement that against my current mesh representation. If I decide to change, I should be able to do it without breaking code outside that utility (and other similar ones which I'll no doubt have to build).
+
+```rust
+fn vein_edges(&self) -> Vec<(usize, usize)> {
+        let mut veins = vec![];
+        for (a, b) in &self.edges {
+            let vertex_a = self.vertices[*a];
+            let vertex_b = self.vertices[*b];
+            if let (Vertex::Vein(_), Vertex::Vein(_)) = (vertex_a, vertex_b) {
+                veins.push((*a, *b));
+            }
+        }
+
+        veins
+    }
+```
+
+Now that gives me what I need to write the code to elongate vein segments:
+
+```rust
+for (a, b) in &self.vein_edges() {
+            let vertex_a = &self.vertices[*a];
+            let vertex_b = &self.vertices[*b];
+            let position_a = vertex_a.position();
+            let position_b = vertex_b.position();
+            let dx = position_b[0] - position_a[0];
+            let dy = position_b[1] - position_a[1];
+            let orientation = (dy).atan2(dx);
+            let growth = self.paramaters.vein_growth_rate * delta;
+            let new_b = [
+                position_b[0] + orientation.cos() * growth,
+                position_b[1] + orientation.sin() * growth,
+            ];
+            self.vertices[*b].set_position(new_b);
+        }
+```
+
+There's a clarity change here. I'd initially named the function for getting a vertex's position `location` and I'm not sure why, it was confusing. Now it's called `position`. I also wrote a tirvial semetric function, `set_position`.
+
+I'm making an important assumption here. Like I mentioned above, veins are directional. They have a stem-ward and a margin-ward direction. We want them to elongate in the margin-ward direction. I'm assuming that the edges stored in `self.edges` are stored with the stem-ward vertex first. So far that's true but I'll have to make sure to maintain that guarentee as I add vertices to the mesh. Other than that this is just some simple trigonometry to figure out which direction the margin-ward vertex should move.
+
+But wait, what's that `self.parameters.vein_growth_rate` there? Well, so far I haven't talked (or even thought) very much about parameters. But there's going to be a lot of them, this is one. I've added a very simple parameters container to the `Leaf`. Most of these parameters will be constant for the leaf's lifetime but some may vary as it ages.
+
+We need to incorporate this new code into the `main` by having it loop through a few iterations before writing out an image.
+
+```rust
+
+
+fn main() {
+    let mut leaf = Leaf::new();
+    for _ in 0..10 {
+        leaf.step_simulation(1.0);
+    }
+    let image = render(&leaf, 500, 500);
+    image.write_png(args().nth(1).unwrap()).unwrap();
+}
+```
+
+![primordium](images/primordium_crazy_vein.png)
+
+Ok, umm. That's not what I weas expecting. The vein grew enormously, which is fine. I know the growth prameter isn't tuned yet. But why didn't the whole shape stretch out with it? The margin should be connected to the vein and even if we aren't adjusting the position of other vertices to accomidate vein growth yet the the triangles that are attached to the vein vertices should still stretch as they move.

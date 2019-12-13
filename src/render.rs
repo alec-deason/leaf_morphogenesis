@@ -34,12 +34,12 @@ pub fn render(leaf: &Leaf, width: u32, height: u32) -> DrawTarget {
         let a = leaf.vertices[*a];
         let b = leaf.vertices[*b];
 
-        let p = a.location();
+        let p = a.position();
         pb.move_to(
             (p[0] - leaf_min_x) * scale + x_offset,
             (p[1] - leaf_min_y) * scale + y_offset,
         );
-        let p = b.location();
+        let p = b.position();
         pb.line_to(
             (p[0] - leaf_min_x) * scale + x_offset,
             (p[1] - leaf_min_y) * scale + y_offset,
@@ -57,7 +57,7 @@ fn extremes(leaf: &Leaf) -> (f32, f32, f32, f32) {
     let mut max_y = std::f32::MIN;
 
     for vertex in &leaf.vertices {
-        let p = vertex.location();
+        let p = vertex.position();
         if p[0] < min_x {
             min_x = p[0];
         } else if p[0] > max_x {
