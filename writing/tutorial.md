@@ -84,21 +84,21 @@ That's actually a pretty good start. I can create a leaf, I know how I'm going t
 
 ## Renderer (The Saga Begins)
 
-If you're only interested in the simulation part of this project then you should definitly skip this section, it's going to be a bunch of code just so we can draw some lines into a PNG. On the other hand, if you're intrested in making pretty images with Rust that's what this is all about so read on. Though it'll be a long while before anything is actually pretty.
+If you're only interested in the simulation part of this project or you've dealt with drawing images from code before then you should definitly skip this section, it's going to be a bunch of fiddling just so we can draw some lines into a PNG. On the other hand, if you're intrested in how to make images from Rust, read on.
 
 I'm going to come back to the renderer a number of times. After all the goal of this project is to have pretty images of pretty leaves and rendering pretty is hard so we aren't going to even try to get there in the first pass. What I'm writing now is basically just a debug view. If it's got bones I can build on later, that's great but not the important part.
 
-I've been trying to keep my dependencies light but I need a drawing library, rolling my own is a big project and way beyond the scope of this. Rust doesn't have an obvious go-to library for drawing. I like [Cairo](https://www.cairographics.org/) and if this were just for me or something I only intended to distribute to linux (where Cairo generally just works) then that's what I'd use. But it's an ugly, heavy dependency that I know tends to cause problems on Windows and Mac so I'd rather not bring it in. The problem is that most of the non-realtime drawing tools for Rust depend on Cairo themselves, or other equally big non-Rust libraries. One of the exceptions is [raqote](https://crates.io/crates/raqote). I've actually never used it before but it's pure Rust, seems to be reasonably complete and is a dependency for some other serious tools so I figure it's worth trying out.
+I've been trying to keep my dependencies light but I need a drawing library, rolling my own is a big project and way beyond the scope of this. Rust doesn't have an obvious go-to library for drawing. I like [Cairo](https://www.cairographics.org/) and there are bindings for it so if this were just for me then that's what I'd use. But it's an ugly, heavy dependency that I know tends to cause problems on Windows and Mac so I'd rather not bring it in. The problem is that most of the non-realtime drawing tools for Rust depend on Cairo themselves, or other equally big non-Rust libraries. One of the exceptions is [raqote](https://crates.io/crates/raqote). I've actually never used it before but it's pure Rust, seems to be reasonably complete and is a dependency for some other serious tools so I figure it's worth trying out.
 
-Rendering should not leak into the simulation side at all. I don't even want to have rendering specific stuff in the Leaf struct. So I'm going to stick it in it's own `render` module and make the entry point be a function that takes a Leaf and some configuration and returns a finished image. That'll certainly work for now and is likely right for the long term too.
+Rendering should not leak into the simulation side at all. I don't want any rendering specific data or even behavior in the `Leaf` struct. So I'm going to stick that stuff in it's own `render` module and make the entry point be a function that takes a Leaf and some configuration and returns a finished image. That'll certainly work for now and is likely right for the long term too.
 
 ```rust
 {{git-include: src/render.rs:28852631:4-5}}
 ```
 
-Great, I know what I need to draw, I know how large I should draw it and I know what I'm going to return. `DrawTarget` is raqote's representation of an image which you can draw to or write out. I'm not thrilled to be leaking a raqote type out of this function but I don't want to have to do my write here and dealing with it in a form like `Vec<u8>` or something is a pain. So we'll do this for now.
+Great, I know what I need to draw, I know how large I should draw it and I know what I'm going to return. `DrawTarget` is raqote's representation of an image which you can draw to or write out. I'm not thrilled to be leaking a raqote type out of this function but I don't want to have to do my write here and dealing with pixel data in a form like `Vec<u8>` or something is a pain. So we'll do this for now.
 
-Next I need to know how the leaf fits into the output size. I don't know anything about how large they'll be or how they're shaped so I'm just going to normalize whatever I've been handed so it fits neatly into the output. To do that I need to find the leaf's bounding rectangle. So here's a little utility for that:
+Next I need to know how the leaf fits into the output size. I don't have any information about how large they'll be or how they'll be shaped so I'm just going to normalize whatever I've been handed so it fits neatly into the output. To do that I need to find the leaf's bounding rectangle. So here's a little utility for that:
 
 ```rust
 {{git-include: src/render.rs:28852631:52-73}}
@@ -116,9 +116,9 @@ Now to setup the raqote surface that we'll be drawing to and some configuration 
 {{git-include: src/render.rs:28852631:12-30}}
 ```
 
-Raqote does colors as `u8` RGBA values, which is fine. I'd rather work with floats and HSV instead of RGB, but I guess that's too much to ask for. Later I will actually bring in some tools for working with colors in HSV space but RGB is fine for now. That clear sets the image to a solid, opaque color.
+Raqote does colors as RGB values, which is fine. I'd rather work with HSV instead because it's much [easier for procedurally generating colors](https://tylerxhobbs.com/essays/2016/working-with-color-in-generative-art). I guess that's too much to ask for. Later I will actually bring in some tools for working with colors in HSV space but RGB is fine for now. That `clear` just sets the image to a solid, opaque color.
 
-Now to actually draw. I'm realizing already that my choice of datastructure has a problem. It makes it hard to iterate over the actual triangles in the triangle mesh, I only have access to the edges and vertices. For the simulation I think that's fine but for rendering it's akward. I may need to switch to a half edge representation or something. Or just deal with the fact that I need to do a relatively expensive pass to reconstruct the triangles for rendering knowing that it wont be _that_ expensive because the meshes are small. For now I'll just draw a wire frame which is easy in the current representation.
+Now to actually draw. I'm realizing already that my choice of datastructure has a problem. It makes it hard to iterate over the actual triangles in the triangle mesh, I only have access to the edges and vertices. For the simulation I think that's fine but for rendering it's akward. I may need to switch to a [half edge representation](https://en.wikipedia.org/wiki/Doubly_connected_edge_list) or something. Or just deal with the fact that I need to do a relatively expensive pass to reconstruct the triangles for rendering knowing that it wont be _that_ expensive because the meshes are small. For now I'll just draw a wire frame which is easy in the current representation.
 
 ```rust
 {{git-include: src/render.rs:28852631:31-48}}
