@@ -57,25 +57,49 @@ Ok. I think that covers the broad strokes of the model. There are a lot of detai
 Data structures first:
 
 ```rust
-{{git-include: src/lib.rs:28852631:2-5}}
+#[derive(Copy, Clone, Debug)]
+pub struct Morphogens;
+type Point = [f32; 2];
 ```
 
 I don't really know how to represent morphogens yet. They're probably a bitfield or the moral equivelant of that. I'm going to punt for now and just make a unit struct stub so that I have something to stick in other structures. It's possible that I should use a linear algebra crate and it's point types but I don't think I'm going to need it so I'm going to go with the simpelest possible point representation for now. I may have to back out of this decision later.
 
 ```rust
-{{git-include: src/lib.rs:28852631:6-12}}
+#[derive(Copy, Clone, Debug)]
+pub enum Vertex {
+    Lamina(Point),
+    Margin(Point, Morphogens),
+    Vein(Point),
+}
  ```
  
  I know that I have three classes of things tied to my triangle mesh and that any point in the mesh can only belong to one class so I think representing vertex data with an enum is right. I may neeed to cram more data into the Vein variant since veins have a directionality, each vein vertex has a base-ward and a tip-ward (basipetal and acropetal for all you fancy folks) neighboor. I don't intend to represent directedness anywhere else so that data probably goes here. We'll see.
  
  ```rust
-{{git-include: src/lib.rs:28852631:23-27}}
+pub struct Leaf {
+    pub vertices: Vec<Vertex>,
+    pub edges: Vec<(usize, usize)>,
+}
 ```
 
 There are more sophisticated ways to represent a triangle mesh. I don't thing we're going to need more than this. It depends a lot on what operations I end up needing to do on the mesh. But this gives me everything I need to do any operation, even if I can't necessarily doing effeciently so it'll work for now.
 
 ```rust
-{{git-include: src/lib.rs:28852631:28-43}}
+impl Leaf {
+    pub fn new() -> Self {
+        Self {
+            vertices: vec![
+                Vertex::Vein([0.0, 0.0]),
+                Vertex::Vein([0.0, 1.0]),
+                Vertex::Margin([0.1, 0.1], Morphogens),
+                Vertex::Margin([0.0, 1.0], Morphogens),
+                Vertex::Margin([-0.1, 0.1], Morphogens),
+                Vertex::Margin([0.0, 1.0], Morphogens),
+            ],
+            edges: vec![(0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3), (4, 5)],
+        }
+    }
+}
 ```
 
 I think every leaf will start out identically and all variantion will come from parameters to the growth processes or randomness in those processes so hardcoding the initial shape like this should be fine. I'm not sure that's actually the right initial shape but it'll be something like that. I probably need to have some initial lamina vertices. Whatever, I'll come back.
@@ -93,7 +117,7 @@ I've been trying to keep my dependencies light but I need a drawing library, rol
 Rendering should not leak into the simulation side at all. I don't even want to have rendering specific stuff in the Leaf struct. So I'm going to stick it in it's own `render` module and make the entry point be a function that takes a Leaf and some configuration and returns a finished image. That'll certainly work for now and is likely right for the long term too.
 
 ```rust
-{{git-include: src/render.rs:28852631:4-5}}
+pub fn render(leaf: &Leaf, width: u32, height: u32) -> DrawTarget {
 ```
 
 Great, I know what I need to draw, I know how large I should draw it and I know what I'm going to return. `DrawTarget` is raqote's representation of an image which you can draw to or write out. I'm not thrilled to be leaking a raqote type out of this function but I don't want to have to do my write here and dealing with it in a form like `Vec<u8>` or something is a pain. So we'll do this for now.
@@ -101,19 +125,62 @@ Great, I know what I need to draw, I know how large I should draw it and I know 
 Next I need to know how the leaf fits into the output size. I don't know anything about how large they'll be or how they're shaped so I'm just going to normalize whatever I've been handed so it fits neatly into the output. To do that I need to find the leaf's bounding rectangle. So here's a little utility for that:
 
 ```rust
-{{git-include: src/render.rs:28852631:52-73}}
+fn extremes(leaf: &Leaf) -> (f32, f32, f32, f32) {
+    let mut min_x = std::f32::MAX;
+    let mut max_x = std::f32::MIN;
+    let mut min_y = std::f32::MAX;
+    let mut max_y = std::f32::MIN;
+
+    for vertex in &leaf.vertices {
+        let p = vertex.location();
+        if p[0] < min_x {
+            min_x = p[0];
+        } else if p[0] > max_x {
+            max_x = p[0];
+        }
+        if p[1] < min_y {
+            min_y = p[1];
+        } else if p[1] > max_y {
+            max_y = p[1];
+        }
+    }
+    (min_x, max_x, min_y, max_y)
+}
 ```
 
 Back in the rendering function I use that information to figure out the scale and offsets I need in order to transform the leaf such that it's in the center of the image and as large as possible without distortion.
 
 ```rust
-{{git-include: src/render.rs:28852631:4-11}}
+pub fn render(leaf: &Leaf, width: u32, height: u32) -> DrawTarget {
+    let (leaf_min_x, leaf_max_x, leaf_min_y, leaf_max_y) = extremes(leaf);
+    let leaf_width = leaf_max_x - leaf_min_x;
+    let leaf_height = leaf_max_y - leaf_min_y;
+    let scale = (width as f32 / leaf_width).min(height as f32 / leaf_height);
+    let x_offset = (width as f32 - leaf_width * scale) / 2.0;
+    let y_offset = (height as f32 - leaf_height * scale) / 2.0;
 ```
 
 Now to setup the raqote surface that we'll be drawing to and some configuration objects we'll be needing later.
 
 ```rust
-{{git-include: src/render.rs:28852631:12-30}}
+    let edge_color = Source::Solid(SolidSource {
+        r: 80,
+        g: 80,
+        b: 80,
+        a: 255,
+    });
+    let edge_stroke = StrokeStyle {
+        width: 1.0,
+        ..Default::default()
+    };
+
+    let mut dt = DrawTarget::new(width as i32, height as i32);
+    dt.clear(SolidSource {
+        r: 255,
+        g: 255,
+        b: 255,
+        a: 255,
+    });
 ```
 
 Raqote does colors as `u8` RGBA values, which is fine. I'd rather work with floats and HSV instead of RGB, but I guess that's too much to ask for. Later I will actually bring in some tools for working with colors in HSV space but RGB is fine for now. That clear sets the image to a solid, opaque color.
@@ -121,15 +188,40 @@ Raqote does colors as `u8` RGBA values, which is fine. I'd rather work with floa
 Now to actually draw. I'm realizing already that my choice of datastructure has a problem. It makes it hard to iterate over the actual triangles in the triangle mesh, I only have access to the edges and vertices. For the simulation I think that's fine but for rendering it's akward. I may need to switch to a half edge representation or something. Or just deal with the fact that I need to do a relatively expensive pass to reconstruct the triangles for rendering knowing that it wont be _that_ expensive because the meshes are small. For now I'll just draw a wire frame which is easy in the current representation.
 
 ```rust
-{{git-include: src/render.rs:28852631:31-48}}
+    for (a, b) in &leaf.edges {
+        let mut pb = PathBuilder::new();
+        let a = leaf.vertices[*a];
+        let b = leaf.vertices[*b];
+
+        let p = a.location();
+        pb.move_to(
+            (p[0] - leaf_min_x) * scale + x_offset,
+            (p[1] - leaf_min_y) * scale + y_offset,
+        );
+        let p = b.location();
+        pb.line_to(
+            (p[0] - leaf_min_x) * scale + x_offset,
+            (p[1] - leaf_min_y) * scale + y_offset,
+        );
+        dt.stroke(&pb.finish(), &edge_color, &edge_stroke, &DrawOptions::new());
+    }
 ```
  
 Here we just loop through all the edges in the mesh, transform the vertices so they fit in the image and draw them to the surface. Easy. And that's actually it. We return the DrawTarget and we're done. Don't need to do any finalization or cleanup which is pretty nice. The last bit is to write it out to a file which I do in a seperate `main.rs`
 
 ```rust
-{{git-include: src/main.rs:28852631:0-9}}
+use std::env::args;
+
+use leaf_morphogenesis::{render::render, Leaf};
+
+fn main() {
+    let leaf = Leaf::new();
+    let image = render(&leaf, 500, 500);
+    image.write_png(args().nth(1).unwrap()).unwrap();
+}
 ```
 
 ![primordium](images/primordium_first_render.png)
 
 Not great, not pretty but basically leaf shaped. I'll take it.
+
