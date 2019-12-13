@@ -56,27 +56,19 @@ Ok. I think that covers the broad strokes of the model. There are a lot of detai
 
 Data structures first:
 
-```rust
 {{git-include: src/lib.rs:28852631:2-5}}
-```
 
 I don't really know how to represent morphogens yet. They're probably a bitfield or the moral equivelant of that. I'm going to punt for now and just make a unit struct stub so that I have something to stick in other structures. It's possible that I should use a linear algebra crate and it's point types but I don't think I'm going to need it so I'm going to go with the simpelest possible point representation for now. I may have to back out of this decision later.
 
-```rust
 {{git-include: src/lib.rs:28852631:6-12}}
- ```
  
  I know that I have three classes of things tied to my triangle mesh and that any point in the mesh can only belong to one class so I think representing vertex data with an enum is right. I may neeed to cram more data into the Vein variant since veins have a directionality, each vein vertex has a base-ward and a tip-ward (basipetal and acropetal for all you fancy folks) neighboor. I don't intend to represent directedness anywhere else so that data probably goes here. We'll see.
  
- ```rust
 {{git-include: src/lib.rs:28852631:23-27}}
-```
 
 There are more sophisticated ways to represent a triangle mesh. I don't thing we're going to need more than this. It depends a lot on what operations I end up needing to do on the mesh. But this gives me everything I need to do any operation, even if I can't necessarily doing effeciently so it'll work for now.
 
-```rust
 {{git-include: src/lib.rs:28852631:28-43}}
-```
 
 I think every leaf will start out identically and all variantion will come from parameters to the growth processes or randomness in those processes so hardcoding the initial shape like this should be fine. I'm not sure that's actually the right initial shape but it'll be something like that. I probably need to have some initial lamina vertices. Whatever, I'll come back.
 
@@ -92,43 +84,31 @@ I've been trying to keep my dependencies light but I need a drawing library, rol
 
 Rendering should not leak into the simulation side at all. I don't want any rendering specific data or even behavior in the `Leaf` struct. So I'm going to stick that stuff in it's own `render` module and make the entry point be a function that takes a Leaf and some configuration and returns a finished image. That'll certainly work for now and is likely right for the long term too.
 
-```rust
 {{git-include: src/render.rs:28852631:4-5}}
-```
 
 Great, I know what I need to draw, I know how large I should draw it and I know what I'm going to return. `DrawTarget` is raqote's representation of an image which you can draw to or write out. I'm not thrilled to be leaking a raqote type out of this function but I don't want to have to do my write here and dealing with pixel data in a form like `Vec<u8>` or something is a pain. So we'll do this for now.
 
 Next I need to know how the leaf fits into the output size. I don't have any information about how large they'll be or how they'll be shaped so I'm just going to normalize whatever I've been handed so it fits neatly into the output. To do that I need to find the leaf's bounding rectangle. So here's a little utility for that:
 
-```rust
 {{git-include: src/render.rs:28852631:52-73}}
-```
 
 Back in the rendering function I use that information to figure out the scale and offsets I need in order to transform the leaf such that it's in the center of the image and as large as possible without distortion.
 
-```rust
 {{git-include: src/render.rs:28852631:4-11}}
-```
 
 Now to setup the raqote surface that we'll be drawing to and some configuration objects we'll be needing later.
 
-```rust
 {{git-include: src/render.rs:28852631:12-30}}
-```
 
 Raqote does colors as RGB values, which is fine. I'd rather work with HSV instead because it's much [easier for procedurally generating colors](https://tylerxhobbs.com/essays/2016/working-with-color-in-generative-art). I guess that's too much to ask for. Later I will actually bring in some tools for working with colors in HSV space but RGB is fine for now. That `clear` just sets the image to a solid, opaque color.
 
 Now to actually draw. I'm realizing already that my choice of datastructure has a problem. It makes it hard to iterate over the actual triangles in the triangle mesh, I only have access to the edges and vertices. For the simulation I think that's fine but for rendering it's akward. I may need to switch to a [half edge representation](https://en.wikipedia.org/wiki/Doubly_connected_edge_list) or something. Or just deal with the fact that I need to do a relatively expensive pass to reconstruct the triangles for rendering knowing that it wont be _that_ expensive because the meshes are small. For now I'll just draw a wire frame which is easy in the current representation.
 
-```rust
 {{git-include: src/render.rs:28852631:31-48}}
-```
  
 Here we just loop through all the edges in the mesh, transform the vertices so they fit in the image and draw them to the surface. Easy. And that's actually it. We return the DrawTarget and we're done. Don't need to do any finalization or cleanup which is pretty nice. The last bit is to write it out to a file which I do in a seperate `main.rs`
 
-```rust
 {{git-include: src/main.rs:28852631:0-9}}
-```
 
 ![primordium](images/primordium_first_render.png)
 
@@ -140,46 +120,15 @@ The first process I'm going to tackle is simple vein growth without branching. T
 
 First, let's do the topology perserving growth, which is where existing segments of vein elongate. I say it's topology preserving because it neither adds nor removes vertices and it doesn't change which vertices form triangles, it just changes the length of the triangle's sides. That makes it prety simple.
 
-```rust
-pub fn step_simulation(&mut self, delta: f32) {
-```
+{{git-include: src/lib.rs:b3078092be3:59-60}}
 
 Great, a function for stepping the leaf's simulation forward but what do I do inside of it? I need to find the veins which, for this process at least, means the edges in the mesh which have `Vein` type vertices at each end. Like with the renderer, this gives me second thoughts about my mesh representation because that information isn't readily avaliable from it, I will have to scan all the edges to find the ones that match that requirement. For a small mesh that's quick if slightly complicated but for a large mesh it's ugly. I'm still going to keep the representation though because I'm still not sure what to replace it with. Instead what I'll do is build a utility function to find the vein edges and implement that against my current mesh representation. If I decide to change, I should be able to do it without breaking code outside that utility (and other similar ones which I'll no doubt have to build).
 
-```rust
-fn vein_edges(&self) -> Vec<(usize, usize)> {
-        let mut veins = vec![];
-        for (a, b) in &self.edges {
-            let vertex_a = self.vertices[*a];
-            let vertex_b = self.vertices[*b];
-            if let (Vertex::Vein(_), Vertex::Vein(_)) = (vertex_a, vertex_b) {
-                veins.push((*a, *b));
-            }
-        }
-
-        veins
-    }
-```
+{{git-include: src/lib.rs:b3078092be3:82-94}}
 
 Now that gives me what I need to write the code to elongate vein segments:
 
-```rust
-for (a, b) in &self.vein_edges() {
-            let vertex_a = &self.vertices[*a];
-            let vertex_b = &self.vertices[*b];
-            let position_a = vertex_a.position();
-            let position_b = vertex_b.position();
-            let dx = position_b[0] - position_a[0];
-            let dy = position_b[1] - position_a[1];
-            let orientation = (dy).atan2(dx);
-            let growth = self.paramaters.vein_growth_rate * delta;
-            let new_b = [
-                position_b[0] + orientation.cos() * growth,
-                position_b[1] + orientation.sin() * growth,
-            ];
-            self.vertices[*b].set_position(new_b);
-        }
-```
+{{git-include: src/lib.rs:b3078092be3:65-80}}
 
 There's a clarity change here. I'd initially named the function for getting a vertex's position `location` and I'm not sure why, it was confusing. Now it's called `position`. I also wrote a tirvial semetric function, `set_position`.
 
@@ -189,19 +138,8 @@ But wait, what's that `self.parameters.vein_growth_rate` there? Well, so far I h
 
 We need to incorporate this new code into the `main` by having it loop through a few iterations before writing out an image.
 
-```rust
-
-
-fn main() {
-    let mut leaf = Leaf::new();
-    for _ in 0..10 {
-        leaf.step_simulation(1.0);
-    }
-    let image = render(&leaf, 500, 500);
-    image.write_png(args().nth(1).unwrap()).unwrap();
-}
-```
+{{git-include: src/main.rs:b3078092be3:4-12}}
 
 ![primordium](images/primordium_crazy_vein.png)
 
-Ok, umm. That's not what I weas expecting. The vein grew enormously, which is fine. I know the growth prameter isn't tuned yet. But why didn't the whole shape stretch out with it? The margin should be connected to the vein and even if we aren't adjusting the position of other vertices to accomidate vein growth yet the the triangles that are attached to the vein vertices should still stretch as they move.
+Ok, umm. That's not what I was expecting. The vein grew enormously, which is fine. I know the growth prameter isn't tuned yet. But why didn't the whole shape stretch out with it? The margin should be connected to the vein and even if we aren't adjusting the position of other vertices to accomidate vein growth yet the the triangles that are attached to the vein vertices should still stretch as they move.

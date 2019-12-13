@@ -9,6 +9,7 @@ pub enum Vertex {
     Lamina(Point),
     Margin(Point, Morphogens),
     Vein(Point),
+    Convergence(Point, Morphogens),
 }
 
 impl Vertex {
@@ -17,6 +18,7 @@ impl Vertex {
             Vertex::Lamina(p) => p,
             Vertex::Margin(p, _) => p,
             Vertex::Vein(p) => p,
+            Vertex::Convergence(p, _) => p,
         }
     }
 
@@ -25,6 +27,7 @@ impl Vertex {
             Vertex::Lamina(p) => *p = position,
             Vertex::Margin(p, _) => *p = position,
             Vertex::Vein(p) => *p = position,
+            Vertex::Convergence(p, _) => *p = position,
         }
     }
 }
@@ -44,14 +47,12 @@ impl Leaf {
         Self {
             vertices: vec![
                 Vertex::Vein([0.0, 0.0]),
-                Vertex::Vein([0.0, 1.0]),
+                Vertex::Convergence([0.0, 1.0], Morphogens),
                 Vertex::Margin([0.1, 0.1], Morphogens),
-                Vertex::Margin([0.0, 1.0], Morphogens),
                 Vertex::Margin([-0.1, 0.1], Morphogens),
-                Vertex::Margin([0.0, 1.0], Morphogens),
             ],
-            edges: vec![(0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3), (4, 5)],
-            parameters: Parameters {
+            edges: vec![(0, 1), (0, 2), (0, 2), (0, 3), (2, 1), (3, 1)],
+            parameters: Parameters{
                 vein_growth_rate: 1.0,
             },
         }
@@ -85,8 +86,10 @@ impl Leaf {
         for (a, b) in &self.edges {
             let vertex_a = self.vertices[*a];
             let vertex_b = self.vertices[*b];
-            if let (Vertex::Vein(_), Vertex::Vein(_)) = (vertex_a, vertex_b) {
-                veins.push((*a, *b));
+            match (vertex_a, vertex_b) {
+                (Vertex::Vein(_), Vertex::Vein(_)) => veins.push((*a, *b)),
+                (Vertex::Vein(_), Vertex::Convergence(_, _)) => veins.push((*a, *b)),
+                _ => (),
             }
         }
 

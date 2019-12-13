@@ -71,11 +71,11 @@ pub enum Vertex {
     Margin(Point, Morphogens),
     Vein(Point),
 }
- ```
+```
  
  I know that I have three classes of things tied to my triangle mesh and that any point in the mesh can only belong to one class so I think representing vertex data with an enum is right. I may neeed to cram more data into the Vein variant since veins have a directionality, each vein vertex has a base-ward and a tip-ward (basipetal and acropetal for all you fancy folks) neighboor. I don't intend to represent directedness anywhere else so that data probably goes here. We'll see.
  
- ```rust
+```rust
 pub struct Leaf {
     pub vertices: Vec<Vertex>,
     pub edges: Vec<(usize, usize)>,
@@ -232,13 +232,13 @@ The first process I'm going to tackle is simple vein growth without branching. T
 First, let's do the topology perserving growth, which is where existing segments of vein elongate. I say it's topology preserving because it neither adds nor removes vertices and it doesn't change which vertices form triangles, it just changes the length of the triangle's sides. That makes it prety simple.
 
 ```rust
-pub fn step_simulation(&mut self, delta: f32) {
+    pub fn step_simulation(&mut self, delta: f32) {
 ```
 
 Great, a function for stepping the leaf's simulation forward but what do I do inside of it? I need to find the veins which, for this process at least, means the edges in the mesh which have `Vein` type vertices at each end. Like with the renderer, this gives me second thoughts about my mesh representation because that information isn't readily avaliable from it, I will have to scan all the edges to find the ones that match that requirement. For a small mesh that's quick if slightly complicated but for a large mesh it's ugly. I'm still going to keep the representation though because I'm still not sure what to replace it with. Instead what I'll do is build a utility function to find the vein edges and implement that against my current mesh representation. If I decide to change, I should be able to do it without breaking code outside that utility (and other similar ones which I'll no doubt have to build).
 
 ```rust
-fn vein_edges(&self) -> Vec<(usize, usize)> {
+    fn vein_edges(&self) -> Vec<(usize, usize)> {
         let mut veins = vec![];
         for (a, b) in &self.edges {
             let vertex_a = self.vertices[*a];
@@ -255,7 +255,7 @@ fn vein_edges(&self) -> Vec<(usize, usize)> {
 Now that gives me what I need to write the code to elongate vein segments:
 
 ```rust
-for (a, b) in &self.vein_edges() {
+        for (a, b) in &self.vein_edges() {
             let vertex_a = &self.vertices[*a];
             let vertex_b = &self.vertices[*b];
             let position_a = vertex_a.position();
@@ -263,7 +263,7 @@ for (a, b) in &self.vein_edges() {
             let dx = position_b[0] - position_a[0];
             let dy = position_b[1] - position_a[1];
             let orientation = (dy).atan2(dx);
-            let growth = self.paramaters.vein_growth_rate * delta;
+            let growth = self.parameters.vein_growth_rate * delta;
             let new_b = [
                 position_b[0] + orientation.cos() * growth,
                 position_b[1] + orientation.sin() * growth,
@@ -281,8 +281,6 @@ But wait, what's that `self.parameters.vein_growth_rate` there? Well, so far I h
 We need to incorporate this new code into the `main` by having it loop through a few iterations before writing out an image.
 
 ```rust
-
-
 fn main() {
     let mut leaf = Leaf::new();
     for _ in 0..10 {
@@ -294,4 +292,6 @@ fn main() {
 ```
 
 ![primordium](images/primordium_crazy_vein.png)
+
+Ok, umm. That's not what I weas expecting. The vein grew enormously, which is fine. I know the growth prameter isn't tuned yet. But why didn't the whole shape stretch out with it? The margin should be connected to the vein and even if we aren't adjusting the position of other vertices to accomidate vein growth yet the the triangles that are attached to the vein vertices should still stretch as they move.
 
