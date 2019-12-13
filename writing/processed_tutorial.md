@@ -293,5 +293,23 @@ fn main() {
 
 ![primordium](images/primordium_crazy_vein.png)
 
-Ok, umm. That's not what I weas expecting. The vein grew enormously, which is fine. I know the growth prameter isn't tuned yet. But why didn't the whole shape stretch out with it? The margin should be connected to the vein and even if we aren't adjusting the position of other vertices to accomidate vein growth yet the the triangles that are attached to the vein vertices should still stretch as they move.
+Ok, umm. That's not what I was expecting. The vein grew enormously, which is fine. I know the growth prameter isn't tuned yet. But why didn't the whole shape stretch out with it? The margin should be connected to the vein and even if we aren't adjusting the position of other vertices to accomidate vein growth yet the the triangles that are attached to the vein vertices should still stretch as they move.
+
+It turns out that there are two problems here. One is that I made a mistake in setting up the initial mesh. Not sure what I was thinking but easy to fix. The other is that I forgot there is actually a fourth vertex type. The vertices where a vein touches the margin are special. The paper calls them convergence points. I think you could treat them as a vertex that is both vein and margin but my representation doesn't support that so I'm going to add a varient called `Convergence` to the `Vertex` enum for this case. In the code I will treat them like a combination of `Vein` and `Margin`.
+
+Here's the new initial mesh:
+
+```rust
+            vertices: vec![
+                Vertex::Vein([0.0, 0.0]),
+                Vertex::Convergence([0.0, 1.0], Morphogens),
+                Vertex::Margin([0.1, 0.1], Morphogens),
+                Vertex::Margin([-0.1, 0.1], Morphogens),
+            ],
+            edges: vec![(0, 1), (0, 2), (0, 2), (0, 3), (2, 1), (3, 1)],
+```
+
+And with a couple of trivial changes elsewhere to accomidate the new vertex type, it does to what I was expecting.
+
+![primordium](images/primordium_long_vein.png)
 
