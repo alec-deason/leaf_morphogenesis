@@ -6,18 +6,28 @@ pub fn render(leaf: &Leaf, width: u32, height: u32) -> DrawTarget {
     let (leaf_min_x, leaf_max_x, leaf_min_y, leaf_max_y) = extremes(leaf);
     let leaf_width = leaf_max_x - leaf_min_x;
     let leaf_height = leaf_max_y - leaf_min_y;
-    let scale = (width as f32/leaf_width).min(height as f32/leaf_height);
-    let x_offset = (width as f32 - leaf_width*scale) / 2.0;
-    let y_offset = (height as f32 - leaf_height*scale) / 2.0;
+    let scale = (width as f32 / leaf_width).min(height as f32 / leaf_height);
+    let x_offset = (width as f32 - leaf_width * scale) / 2.0;
+    let y_offset = (height as f32 - leaf_height * scale) / 2.0;
 
-    let edge_color = Source::Solid(SolidSource { r: 80, g: 80, b: 80, a: 255, });
+    let edge_color = Source::Solid(SolidSource {
+        r: 80,
+        g: 80,
+        b: 80,
+        a: 255,
+    });
     let edge_stroke = StrokeStyle {
         width: 1.0,
         ..Default::default()
     };
 
     let mut dt = DrawTarget::new(width as i32, height as i32);
-    dt.clear(SolidSource { r: 255, g: 255, b: 255, a: 255, });
+    dt.clear(SolidSource {
+        r: 255,
+        g: 255,
+        b: 255,
+        a: 255,
+    });
 
     for (a, b) in &leaf.edges {
         let mut pb = PathBuilder::new();
@@ -25,15 +35,16 @@ pub fn render(leaf: &Leaf, width: u32, height: u32) -> DrawTarget {
         let b = leaf.vertices[*b];
 
         let p = a.location();
-        pb.move_to((p[0]-leaf_min_x)*scale + x_offset, (p[1]-leaf_min_y)*scale + y_offset);
+        pb.move_to(
+            (p[0] - leaf_min_x) * scale + x_offset,
+            (p[1] - leaf_min_y) * scale + y_offset,
+        );
         let p = b.location();
-        pb.line_to((p[0]-leaf_min_x)*scale + x_offset, (p[1]-leaf_min_y)*scale + y_offset);
-        dt.stroke(
-            &pb.finish(),
-            &edge_color,
-            &edge_stroke,
-            &DrawOptions::new()
-       );
+        pb.line_to(
+            (p[0] - leaf_min_x) * scale + x_offset,
+            (p[1] - leaf_min_y) * scale + y_offset,
+        );
+        dt.stroke(&pb.finish(), &edge_color, &edge_stroke, &DrawOptions::new());
     }
 
     dt

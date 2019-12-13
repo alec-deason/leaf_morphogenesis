@@ -1,13 +1,9 @@
 use std::env::args;
 
-use leaf_morphogenesis::{
-    Leaf,
-    render::render,
-};
+use leaf_morphogenesis::{render::render, Leaf};
 
-fn main() -> anyhow::Result<()>{
+fn main() {
     let leaf = Leaf::new();
     let image = render(&leaf, 500, 500);
-    image.write_png(args().nth(1).unwrap())?;
-    Ok(())
+    image.write_png(args().nth(1).unwrap()).unwrap();
 }

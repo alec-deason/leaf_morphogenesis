@@ -202,7 +202,7 @@ Now to actually draw. I'm realizing already that my choice of datastructure has 
      }
 ```
  
-And that's actually it. We return the DrawTarget and we're done. Actually don't need to do any finalization or cleanup which is pretty nice. The last bit is to write it out to a file which I do in a seperate `main.rs`
+Here we just loop through all the edges in the mesh, transform the vertices so they fit in the image and draw them to the surface. Easy. And that's actually it. We return the DrawTarget and we're done. Don't need to do any finalization or cleanup which is pretty nice. The last bit is to write it out to a file which I do in a seperate `main.rs`
 
 ```rust
 use std::env::args;
@@ -212,10 +212,10 @@ use leaf_morphogenesis::{
     render::render,
 };
 
-fn main() -> anyhow::Result<()>{
+fn main() {
     let leaf = Leaf::new();
     let image = render(&leaf, 500, 500);
-    image.write_png(args().nth(1).unwrap())?;
+    image.write_png(args().nth(1).unwrap()).unwrap();
     Ok(())
 }
 ```
