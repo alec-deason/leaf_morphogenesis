@@ -1,4 +1,4 @@
-# Leaf Morphology
+# Leaf Morphogenesis
 
 ## Intro
 
@@ -229,6 +229,8 @@ Not pretty but basically leaf shaped. I'll take it.
 
 The first process I'm going to tackle is simple vein growth without branching. The basic process is super simple but it's going to have complex interactions with other parts of the model. We'll have to deal with moving vertices in the mesh and adding verticies while respecting the requirement that they always form triangles. Both are harder than just making the veins longer.
 
+### Vein segment elongation
+
 First, let's do the topology perserving growth, which is where existing segments of vein elongate. I say it's topology preserving because it neither adds nor removes vertices and it doesn't change which vertices form triangles, it just changes the length of the triangle's sides. That makes it prety simple.
 
 ```rust
@@ -309,7 +311,76 @@ Here's the new initial mesh:
             edges: vec![(0, 1), (0, 2), (0, 2), (0, 3), (2, 1), (3, 1)],
 ```
 
-And with a couple of trivial changes elsewhere to accomidate the new vertex type, it does to what I was expecting.
+And with a couple of trivial changes elsewhere to accomidate the new vertex type, it does do what I was expecting.
 
 ![primordium](images/primordium_long_vein.png)
+
+### Adding new vein segments
+
+This bit is harder because it requires adding new vertices to the mesh while preserving the guarentee that all vertices form triangles (and not other random polygons). To do that I need a tool that can split an edge by adding a new vertex to it and attaching that vertex to the rest of the mesh such that it makes the right triangles.
+
+```rust
+    fn split_edge(&mut self, e: usize, new_vertex: Vertex) {
+        let triangles = self.triangles_for_edge(e);
+
+        let new_vertex_id = self.vertices.len();
+        for triangle in triangles {
+            self.edges.push((new_vertex_id, triangle[2]));
+        }
+
+        let (a, b) = self.edges[e];
+        self.edges.push((a, new_vertex_id));
+        self.edges.push((new_vertex_id, b));
+        self.vertices.push(new_vertex);
+        self.edges.remove(e);
+    }
+```
+
+The idea here is that I find each triangle that share the edge I want to split, there will always be either one or two. Each will consist of the two vertices in the edge I am splitting plus one additional vertex so I take that third vertex, attach it to the new vertex I am adding to make two new triangles. Then I delete the old edge and I'm done. Now I need an implementation of that `triangles_for_edge` function.
+
+```rust
+    pub fn triangles_for_edge(&self, e: usize) -> Vec<[usize; 3]> {
+        let (a, b) = self.edges[e];
+        let mut potential_triangles = vec![(false, false); self.vertices.len()];
+        for (aa, bb) in &self.edges {
+            if *aa == a || *aa == b {
+                potential_triangles[*bb].0 = true;
+            } else if *bb == a || *bb == b {
+                potential_triangles[*aa].1 = true;
+            }
+        }
+        let mut triangles = vec![];
+        for (c, (a_adjacent, b_adjacent)) in potential_triangles.into_iter().enumerate() {
+            if c == a || c == b {
+                continue
+            }
+            if a_adjacent && b_adjacent {
+                triangles.push([a, b, c]);
+            }
+        }
+        debug_assert!(triangles.len() == 1 || triangles.len() == 2, "Expected one or two triangles for edge but found {}", triangles.len());
+        triangles
+    }
+```
+
+This would be simpler with a different mesh representation (as I keep saying) but it's not terrible. We scan through the edges to find all the vertices that are connected to either of the vertices of the current edge by some other edge. Then we pull out the ones that are connected to both vertices and are not the current line and that gives us the third point for each of the triangles connected to the current edge.
+
+Given that, sticking it into my simulation step is easy.
+
+```rust
+        for (e, dx, dy, orientation, position_a) in &tips {
+            let length = (dx*dx + dy*dy).sqrt();
+            let new_edge_length = length * self.parameters.new_vein_proportion;
+            let new_x = position_a[0] + orientation.cos()*(length - new_edge_length);
+            let new_y = position_a[1] + orientation.sin()*(length - new_edge_length);
+            let new_vertex = Vertex::Vein([new_x, new_y]);
+            self.split_edge(*e, new_vertex);
+        }
+```
+
+For each vein segment that intersects the margin (I made a list of those earlier when I passed through to elongate the segments) I pick a point along it (where exactly is controlled by the `new_vein_proportion` parameter) and split the edge there.
+
+![primordium](images/primordium_split_veins.png)
+
+Great. Seeing that actually answers a question I've had about how this is going to work. I wasn't sure where internal vertices come from but I guess the answer is vein growth a branching. Neat.
 
