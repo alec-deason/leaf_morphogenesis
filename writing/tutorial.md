@@ -177,3 +177,12 @@ For each vein segment that intersects the margin (I made a list of those earlier
 ![primordium](images/primordium_split_veins.png)
 
 Great. Seeing that actually answers a question I've had about how this is going to work. I wasn't sure where internal vertices come from but I guess the answer is vein growth a branching. Neat.
+
+## An interlude in which I pay for my sins
+
+Ok. I clearly made a mistake when I picked my mesh structure. I can see that it's going to get worse when I start dealing with vein branching so before I move on to that I'm going to switch to a more appropriate structure.
+## Vein branching
+
+Here comes the first bit that I probably don't understand well enough based on my first reading of the paper to just wing. How does vein branching work? I don't know. The length of the margin between two convergence points triggers it to happen (modulo morphogen interactions) but at what angle the split forms is unclear to me. We'll figure it out though.
+
+

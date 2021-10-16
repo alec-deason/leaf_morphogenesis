@@ -20,6 +20,12 @@ pub fn render(leaf: &Leaf, width: u32, height: u32) -> DrawTarget {
         width: 1.0,
         ..Default::default()
     };
+    let lamina_color = Source::Solid(SolidSource {
+        r: 12,
+        g: 200,
+        b: 80,
+        a: 255,
+    });
 
     let mut dt = DrawTarget::new(width as i32, height as i32);
     dt.clear(SolidSource {
@@ -29,23 +35,24 @@ pub fn render(leaf: &Leaf, width: u32, height: u32) -> DrawTarget {
         a: 255,
     });
 
-    for (a, b) in &leaf.edges {
-        let mut pb = PathBuilder::new();
-        let a = leaf.vertices[*a];
-        let b = leaf.vertices[*b];
-
-        let p = a.position();
-        pb.move_to(
-            (p[0] - leaf_min_x) * scale + x_offset,
-            (p[1] - leaf_min_y) * scale + y_offset,
-        );
-        let p = b.position();
+    let mut pb = PathBuilder::new();
+    pb.move_to(
+        (leaf.margin[0].position[0] - leaf_min_x) * scale + x_offset,
+        (leaf.margin[0].position[1] - leaf_min_y) * scale + y_offset,
+    );
+    eprintln!("{:?}", leaf.margin[0].position);
+    for vertex in &leaf.margin[1..] {
         pb.line_to(
-            (p[0] - leaf_min_x) * scale + x_offset,
-            (p[1] - leaf_min_y) * scale + y_offset,
+            (vertex.position[0] - leaf_min_x) * scale + x_offset,
+            (vertex.position[1] - leaf_min_y) * scale + y_offset,
         );
-        dt.stroke(&pb.finish(), &edge_color, &edge_stroke, &DrawOptions::new());
+        eprintln!("{:?}", vertex.position);
     }
+    pb.line_to(
+        (leaf.margin[0].position[0] - leaf_min_x) * scale + x_offset,
+        (leaf.margin[0].position[1] - leaf_min_y) * scale + y_offset,
+    );
+    dt.fill(&pb.finish(), &lamina_color, &DrawOptions::new());
 
     dt
 }
@@ -56,18 +63,21 @@ fn extremes(leaf: &Leaf) -> (f32, f32, f32, f32) {
     let mut min_y = std::f32::MAX;
     let mut max_y = std::f32::MIN;
 
-    for vertex in &leaf.vertices {
-        let p = vertex.position();
+    for vertex in &leaf.margin {
+        let p = vertex.position;
         if p[0] < min_x {
             min_x = p[0];
-        } else if p[0] > max_x {
+        }
+        if p[0] > max_x {
             max_x = p[0];
         }
         if p[1] < min_y {
             min_y = p[1];
-        } else if p[1] > max_y {
+        }
+        if p[1] > max_y {
             max_y = p[1];
         }
     }
+    eprintln!("{:?}", (min_x, max_x, min_y, max_y));
     (min_x, max_x, min_y, max_y)
 }
